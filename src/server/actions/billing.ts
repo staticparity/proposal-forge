@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { stripe, PLANS } from "@/lib/stripe";
+import { stripe, getProPriceId } from "@/lib/stripe";
 import { redirect } from "next/navigation";
 
 /**
@@ -38,13 +38,16 @@ export async function createCheckoutSession() {
       .where(eq(users.id, userId));
   }
 
+  // Get the price ID (auto-resolves from product if needed)
+  const priceId = await getProPriceId();
+
   // Create checkout session
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
     line_items: [
       {
-        price: PLANS.pro.stripePriceId,
+        price: priceId,
         quantity: 1,
       },
     ],
