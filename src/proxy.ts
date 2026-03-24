@@ -1,9 +1,13 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/dashboard/billing(.*)",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
+  // Allow Stripe redirect-back URLs through without auth wall
+  if (isProtectedRoute(req) && !isPublicRoute(req)) {
     await auth.protect();
   }
 });
