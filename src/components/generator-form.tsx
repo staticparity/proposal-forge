@@ -72,66 +72,13 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
         signal: controller.signal,
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Request failed (${res.status})`);
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Try to parse the accumulated buffer as JSON
-        // streamObject sends partial JSON that grows over time
-        try {
-          const parsed = JSON.parse(buffer);
-          setOutput(parsed);
-        } catch {
-          // Not valid JSON yet — keep accumulating
-          // Try to find the last complete JSON object in the stream
-          const lastNewline = buffer.lastIndexOf("\n");
-          if (lastNewline !== -1) {
-            const lastLine = buffer.slice(lastNewline + 1).trim();
-            const prevLine = buffer.slice(0, lastNewline).split("\n").pop()?.trim();
-            const lineToTry = lastLine || prevLine;
-            if (lineToTry) {
-              try {
-                const parsed = JSON.parse(lineToTry);
-                setOutput(parsed);
-              } catch {
-                // still not valid
-              }
-            }
-          }
-        }
-      }
-
-      // Final parse
-      buffer += decoder.decode();
-      try {
-        const finalParsed = JSON.parse(buffer);
-        setOutput(finalParsed);
-      } catch {
-        // Try last line
-        const lines = buffer.trim().split("\n").filter(Boolean);
-        for (let i = lines.length - 1; i >= 0; i--) {
-          try {
-            const parsed = JSON.parse(lines[i]);
-            setOutput(parsed);
-            break;
-          } catch {
-            // try previous line
-          }
-        }
-      }
+      setOutput(data);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -167,6 +114,9 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
     output?.bidAdvice
   );
 
+  // Get persona title for display
+  const selectedPersonaTitle = selectedPersona?.title ?? "";
+
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       {/* ── Left: Input Form ─────────────────────────────────────────── */}
@@ -189,8 +139,10 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
               value={selectedPersonaId}
               onValueChange={(val) => setSelectedPersonaId(val ?? "")}
             >
-              <SelectTrigger id="persona-select">
-                <SelectValue placeholder="Select a persona…" />
+              <SelectTrigger id="persona-select" className="w-full">
+                <SelectValue placeholder="Select a persona…">
+                  {selectedPersonaTitle || "Select a persona…"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {personas.map((p) => (
@@ -213,7 +165,7 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             rows={12}
-            className="resize-y"
+            className="resize-none overflow-y-auto"
           />
           <p className="text-xs text-muted-foreground">
             {jobDescription.length} characters
@@ -246,28 +198,27 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
         )}
       </div>
 
-      {/* ── Right: Output Stream ─────────────────────────────────────── */}
+      {/* ── Right: Output ────────────────────────────────────────────── */}
       <div className="space-y-4">
-        {isLoading && !hasOutput && (
+        {isLoading && (
           <div className="space-y-4">
             <Skeleton className="h-48 w-full rounded-lg" />
             <Skeleton className="h-24 w-full rounded-lg" />
             <Skeleton className="h-20 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
           </div>
         )}
 
-        {hasOutput && (
+        {!isLoading && hasOutput && (
           <>
             <OutputPanel
               title="📝 Proposal"
               content={output?.proposal ?? ""}
-              isStreaming={isLoading}
             />
 
             <OutputPanel
               title="💬 Client Message"
               content={output?.clientMessage ?? ""}
-              isStreaming={isLoading}
             />
 
             {(output?.questions?.length ?? 0) > 0 && (
@@ -278,26 +229,22 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
                     ?.map((q, i) => `${i + 1}. ${q}`)
                     .join("\n") ?? ""
                 }
-                isStreaming={isLoading}
               />
             )}
 
             <OutputPanel
               title="💰 Bid Advice"
               content={output?.bidAdvice ?? ""}
-              isStreaming={isLoading}
             />
 
-            {!isLoading && (
-              <Button
-                onClick={handleSave}
-                disabled={hasSaved}
-                variant="outline"
-                className="w-full"
-              >
-                {hasSaved ? "✓ Saved to History" : "Save to History"}
-              </Button>
-            )}
+            <Button
+              onClick={handleSave}
+              disabled={hasSaved}
+              variant="outline"
+              className="w-full"
+            >
+              {hasSaved ? "✓ Saved to History" : "Save to History"}
+            </Button>
           </>
         )}
 

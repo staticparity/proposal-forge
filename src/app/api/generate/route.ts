@@ -1,4 +1,4 @@
-import { streamObject } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { getAIModel } from "@/lib/ai";
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   // Auth check
   const { userId } = await auth();
   if (!userId) {
-    return new Response("Unauthorized", { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // ── Rate limiting ──
@@ -116,13 +116,21 @@ export async function POST(req: Request) {
 
   const model = getAIModel(provider as AIProvider | undefined);
 
-  // Stream structured object
-  const result = streamObject({
-    model,
-    schema: proposalOutputSchema,
-    prompt: `FREELANCER PERSONA (${personaTitle}):\n${personaContent}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nGenerate a winning proposal, client message, 3 smart questions, and bid advice.`,
-    system: SYSTEM_PROMPT,
-  });
+  try {
+    // Generate structured object (non-streaming, reliable JSON response)
+    const { object } = await generateObject({
+      model,
+      schema: proposalOutputSchema,
+      prompt: `FREELANCER PERSONA (${personaTitle}):\n${personaContent}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nGenerate a winning proposal, client message, 3 smart questions, and bid advice.`,
+      system: SYSTEM_PROMPT,
+    });
 
-  return result.toTextStreamResponse();
+    return Response.json(object);
+  } catch (err) {
+    console.error("AI generation error:", err);
+    return Response.json(
+      { error: "AI generation failed. Please try again." },
+      { status: 500 }
+    );
+  }
 }

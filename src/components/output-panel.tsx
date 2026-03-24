@@ -9,15 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
 interface OutputPanelProps {
   title: string;
   content: string;
-  isStreaming?: boolean;
 }
 
-export function OutputPanel({ title, content, isStreaming }: OutputPanelProps) {
+export function OutputPanel({ title, content }: OutputPanelProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -35,7 +33,7 @@ export function OutputPanel({ title, content, isStreaming }: OutputPanelProps) {
           variant="ghost"
           size="icon-sm"
           onClick={handleCopy}
-          disabled={!content || isStreaming}
+          disabled={!content}
           className="opacity-60 hover:opacity-100"
         >
           {copied ? (
@@ -46,14 +44,9 @@ export function OutputPanel({ title, content, isStreaming }: OutputPanelProps) {
         </Button>
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
-        <p
-          className={cn(
-            "text-sm leading-relaxed whitespace-pre-wrap",
-            isStreaming && "animate-pulse"
-          )}
-        >
+        <p className="text-sm leading-relaxed whitespace-pre-wrap">
           {content || (
-            <span className="text-muted-foreground italic">Generating…</span>
+            <span className="text-muted-foreground italic">No content</span>
           )}
         </p>
       </CardContent>
