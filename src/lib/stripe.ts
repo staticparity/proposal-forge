@@ -40,7 +40,7 @@ export async function getProPriceId(): Promise<string> {
   if (!productId) {
     throw new Error(
       "Neither STRIPE_PRO_PRICE_ID nor STRIPE_PRO_PRODUCT_ID is set. " +
-        "Add one of these to your .env.local file."
+      "Add one of these to your .env.local file."
     );
   }
 

@@ -18,24 +18,26 @@ export function BillingActions({ isPro }: BillingActionsProps) {
 
   function handleUpgrade() {
     startTransition(async () => {
-      try {
-        await createCheckoutSession();
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to start checkout"
-        );
+      const result = await createCheckoutSession();
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.url) {
+        window.location.href = result.url;
       }
     });
   }
 
   function handleManage() {
     startTransition(async () => {
-      try {
-        await createPortalSession();
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to open portal"
-        );
+      const result = await createPortalSession();
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.url) {
+        window.location.href = result.url;
       }
     });
   }

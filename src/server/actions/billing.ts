@@ -5,24 +5,22 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { stripe, getProPriceId } from "@/lib/stripe";
-import { redirect } from "next/navigation";
 
 /**
  * Creates a Stripe Checkout session for the Pro plan.
- * Redirects the user to Stripe's hosted checkout page.
+ * Returns the checkout URL for the client to redirect to.
  */
-export async function createCheckoutSession() {
+export async function createCheckoutSession(): Promise<{ url?: string; error?: string }> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { error: "Unauthorized" };
 
-  // Get or create Stripe customer
   const [user] = await db
     .select()
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
-  if (!user) throw new Error("User not found");
+  if (!user) return { error: "User not found" };
 
   let customerId = user.stripeCustomerId;
 
@@ -38,34 +36,31 @@ export async function createCheckoutSession() {
       .where(eq(users.id, userId));
   }
 
-  // Get the price ID (auto-resolves from product if needed)
-  const priceId = await getProPriceId();
+  try {
+    const priceId = await getProPriceId();
 
-  // Create checkout session
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1,
-      },
-    ],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?cancelled=true`,
-  });
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?cancelled=true`,
+    });
 
-  if (session.url) {
-    redirect(session.url);
+    return { url: session.url ?? undefined };
+  } catch (err) {
+    console.error("Stripe checkout error:", err);
+    return { error: err instanceof Error ? err.message : "Checkout failed" };
   }
 }
 
 /**
- * Creates a Stripe Customer Portal session for managing subscriptions.
+ * Creates a Stripe Customer Portal session.
+ * Returns the portal URL for the client to redirect to.
  */
-export async function createPortalSession() {
+export async function createPortalSession(): Promise<{ url?: string; error?: string }> {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) return { error: "Unauthorized" };
 
   const [user] = await db
     .select()
@@ -74,15 +69,18 @@ export async function createPortalSession() {
     .limit(1);
 
   if (!user?.stripeCustomerId) {
-    throw new Error("No billing account found");
+    return { error: "No billing account found" };
   }
 
-  const session = await stripe.billingPortal.sessions.create({
-    customer: user.stripeCustomerId,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing`,
-  });
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing`,
+    });
 
-  if (session.url) {
-    redirect(session.url);
+    return { url: session.url ?? undefined };
+  } catch (err) {
+    console.error("Stripe portal error:", err);
+    return { error: err instanceof Error ? err.message : "Portal failed" };
   }
 }
