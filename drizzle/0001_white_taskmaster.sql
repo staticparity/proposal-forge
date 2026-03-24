@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "ai_import_attempts" integer DEFAULT 0 NOT NULL;

@@ -1,5 +1,6 @@
 import { getUserPersonas } from "@/server/actions/personas";
-import { PersonaForm, PersonaCard } from "@/components/persona-components";
+import { PersonaCard } from "@/components/persona-components";
+import { CreatePersonaModal } from "@/components/persona-import-modal";
 import { User } from "lucide-react";
 
 export default async function PersonasPage() {
@@ -16,7 +17,7 @@ export default async function PersonasPage() {
             proposal style.
           </p>
         </div>
-        <PersonaForm />
+        <CreatePersonaModal />
       </div>
 
       {/* List */}
@@ -31,7 +32,7 @@ export default async function PersonasPage() {
             your skills, experience, and portfolio highlights.
           </p>
           <div className="mt-6">
-            <PersonaForm />
+            <CreatePersonaModal />
           </div>
         </div>
       ) : (

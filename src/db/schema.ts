@@ -10,6 +10,7 @@ export const users = pgTable("users", {
     .default("free")
     .notNull(),
   credits: integer("credits").default(5).notNull(),
+  aiImportAttempts: integer("ai_import_attempts").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
