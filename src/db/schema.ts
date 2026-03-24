@@ -1,5 +1,14 @@
 import { pgTable, text, integer, timestamp, uuid } from "drizzle-orm/pg-core";
 
+// ─── Status enum ────────────────────────────────────────────────────────────
+export const GENERATION_STATUSES = [
+  "pending",
+  "interview",
+  "won",
+  "rejected",
+] as const;
+export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
+
 // ─── Users ──────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: text("id").primaryKey(), // Clerk user ID
@@ -39,6 +48,12 @@ export const generations = pgTable("generations", {
   outputQuestions: text("output_questions"), // JSON-stringified string[]
   outputClientMessage: text("output_client_message"),
   outputBidAdvice: text("output_bid_advice"),
+  status: text("status", {
+    enum: ["pending", "interview", "won", "rejected"],
+  })
+    .default("pending")
+    .notNull(),
+  feedbackNotes: text("feedback_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

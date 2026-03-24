@@ -5,6 +5,7 @@ import { getAIModel } from "@/lib/ai";
 import type { AIProvider } from "@/lib/ai";
 import { db } from "@/db";
 import { users, generations } from "@/db/schema";
+import { getWonProposals } from "@/server/actions/history";
 import { eq } from "drizzle-orm";
 import { PLANS } from "@/lib/stripe";
 
@@ -117,12 +118,26 @@ export async function POST(req: Request) {
   const model = getAIModel(provider as AIProvider | undefined);
 
   try {
+    // ── RAG: Fetch won proposals for few-shot context ──
+    const wonProposals = await getWonProposals(userId);
+    const wonTexts = wonProposals
+      .map((r) => r.outputProposal)
+      .filter(Boolean) as string[];
+
+    let systemPrompt = SYSTEM_PROMPT;
+    if (wonTexts.length > 0) {
+      const examples = wonTexts
+        .map((p, i) => `--- WINNING PROPOSAL ${i + 1} ---\n${p}`)
+        .join("\n\n");
+      systemPrompt += `\n\nBelow are examples of the user's past winning proposals. Analyze their tone, structure, and pacing. Mimic this exact winning style for the new proposal:\n\n${examples}`;
+    }
+
     // Generate structured object (non-streaming, reliable JSON response)
     const { object } = await generateObject({
       model,
       schema: proposalOutputSchema,
       prompt: `FREELANCER PERSONA (${personaTitle}):\n${personaContent}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nGenerate a winning proposal, client message, 3 smart questions, and bid advice.`,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
     });
 
     return Response.json(object);

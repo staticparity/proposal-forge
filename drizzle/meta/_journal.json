@@ -15,6 +15,13 @@
       "when": 1774391418609,
       "tag": "0001_white_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774391708619,
+      "tag": "0002_slippery_slipstream",
+      "breakpoints": true
     }
   ]
 }

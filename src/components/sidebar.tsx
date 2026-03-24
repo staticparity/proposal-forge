@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   User,
   History,
+  BarChart3,
   CreditCard,
   Sparkles,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/personas", label: "Personas", icon: User },
   { href: "/dashboard/history", label: "History", icon: History },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
 ];
 

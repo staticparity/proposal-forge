@@ -2,9 +2,10 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { generations } from "@/db/schema";
+import { generations, type GenerationStatus } from "@/db/schema";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 
 const saveSchema = z.object({
   personaId: z.string().uuid().optional(),
@@ -44,6 +45,40 @@ export async function saveGeneration(data: z.infer<typeof saveSchema>) {
     return {
       error:
         error instanceof Error ? error.message : "Failed to save generation",
+    };
+  }
+}
+
+/**
+ * Update status and optional feedback notes for a generation.
+ * Scoped to the authenticated user for security.
+ */
+export async function updateGenerationStatus(
+  id: string,
+  status: GenerationStatus,
+  feedbackNotes?: string
+) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  try {
+    await db
+      .update(generations)
+      .set({
+        status,
+        feedbackNotes: feedbackNotes ?? null,
+      })
+      .where(and(eq(generations.id, id), eq(generations.userId, userId)));
+
+    revalidatePath("/dashboard/history");
+    revalidatePath("/dashboard/analytics");
+    return { success: true };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update generation status",
     };
   }
 }
