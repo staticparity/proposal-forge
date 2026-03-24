@@ -5,6 +5,54 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { stripe, getProPriceId } from "@/lib/stripe";
+import { revalidatePath } from "next/cache";
+
+/**
+ * Cancels the user's Pro subscription at the end of the current billing period.
+ */
+export async function cancelSubscription(): Promise<{ error?: string }> {
+  const { userId } = await auth();
+  if (!userId) return { error: "Unauthorized" };
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user?.stripeCustomerId) {
+    return { error: "No billing account found" };
+  }
+
+  try {
+    // Find active subscriptions for this customer
+    const subscriptions = await stripe.subscriptions.list({
+      customer: user.stripeCustomerId,
+      status: "active",
+      limit: 1,
+    });
+
+    if (subscriptions.data.length === 0) {
+      return { error: "No active subscription found" };
+    }
+
+    // Cancel at end of current period (not immediate)
+    await stripe.subscriptions.update(subscriptions.data[0].id, {
+      cancel_at_period_end: true,
+    });
+
+    await db
+      .update(users)
+      .set({ subscriptionStatus: "cancelled" })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/dashboard/billing");
+    return {};
+  } catch (err) {
+    console.error("Cancel subscription error:", err);
+    return { error: err instanceof Error ? err.message : "Cancellation failed" };
+  }
+}
 
 /**
  * Creates a Stripe Checkout session for the Pro plan.
