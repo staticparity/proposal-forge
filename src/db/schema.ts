@@ -1,4 +1,5 @@
-import { pgTable, text, integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, uuid, varchar, jsonb } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 // ─── Status enum ────────────────────────────────────────────────────────────
 export const GENERATION_STATUSES = [
@@ -9,6 +10,28 @@ export const GENERATION_STATUSES = [
 ] as const;
 export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
 
+// ─── Tier enum ──────────────────────────────────────────────────────────────
+export const USER_TIERS = ["free", "basic", "premium"] as const;
+export type UserTier = (typeof USER_TIERS)[number];
+
+// ─── Tone options ───────────────────────────────────────────────────────────
+export const TONE_OPTIONS = [
+  { value: "direct", label: "Direct & Punchy (Fiverr)" },
+  { value: "professional", label: "Professional (LinkedIn)" },
+  { value: "consultative", label: "Consultative (Upwork)" },
+  { value: "enthusiastic", label: "Enthusiastic" },
+] as const;
+export type ToneValue = (typeof TONE_OPTIONS)[number]["value"];
+
+// ─── Portfolio Item Schema ──────────────────────────────────────────────────
+export const portfolioItemSchema = z.object({
+  title: z.string(),
+  url: z.string().url(),
+  description: z.string(),
+});
+export type PortfolioItem = z.infer<typeof portfolioItemSchema>;
+export const portfolioItemsSchema = z.array(portfolioItemSchema);
+
 // ─── Users ──────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: text("id").primaryKey(), // Clerk user ID
@@ -18,7 +41,9 @@ export const users = pgTable("users", {
   })
     .default("free")
     .notNull(),
-  credits: integer("credits").default(5).notNull(),
+  tier: varchar("tier", { length: 20 }).$type<UserTier>().default("free").notNull(),
+  apiKey: varchar("api_key", { length: 64 }).unique(),
+  credits: integer("credits").default(15).notNull(),
   aiImportAttempts: integer("ai_import_attempts").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -32,6 +57,7 @@ export const personas = pgTable("personas", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   baseHourlyRate: integer("base_hourly_rate").default(0).notNull(), // cents
+  portfolioItems: jsonb("portfolio_items").$type<PortfolioItem[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -49,6 +75,8 @@ export const generations = pgTable("generations", {
   outputQuestions: text("output_questions"), // JSON-stringified string[]
   outputClientMessage: text("output_client_message"),
   outputBidAdvice: text("output_bid_advice"),
+  toneUsed: varchar("tone_used", { length: 50 }),
+  followUpMessage: text("follow_up_message"),
   status: text("status", {
     enum: ["pending", "interview", "won", "rejected"],
   })

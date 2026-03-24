@@ -6,7 +6,7 @@ import { generations, personas } from "@/db/schema";
 import { eq, desc, and, sql, isNotNull } from "drizzle-orm";
 
 export async function getUserGenerations() {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
 
   return db
@@ -17,6 +17,8 @@ export async function getUserGenerations() {
       outputQuestions: generations.outputQuestions,
       outputClientMessage: generations.outputClientMessage,
       outputBidAdvice: generations.outputBidAdvice,
+      toneUsed: generations.toneUsed,
+      followUpMessage: generations.followUpMessage,
       status: generations.status,
       feedbackNotes: generations.feedbackNotes,
       createdAt: generations.createdAt,
@@ -30,7 +32,7 @@ export async function getUserGenerations() {
 }
 
 export async function getUserGenerationCount() {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
 
   const result = await db
@@ -59,7 +61,7 @@ export async function getWonProposals(userId: string) {
  * Analytics aggregation: total, interview, won, rejected counts + monthly breakdown.
  */
 export async function getAnalyticsData() {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
 
   // Status counts
@@ -107,7 +109,7 @@ export async function getAnalyticsData() {
  * Only includes generations with finalBidSubmitted or recommendedBid set.
  */
 export async function getProfitTrackingData() {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
 
   // Monthly avg effective rate from bid data

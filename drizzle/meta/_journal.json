@@ -29,6 +29,13 @@
       "when": 1774392690799,
       "tag": "0003_tiny_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774394940396,
+      "tag": "0004_superb_katie_power",
+      "breakpoints": true
     }
   ]
 }

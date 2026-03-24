@@ -20,7 +20,7 @@ import {
 } from "@/components/profit-analysis-card";
 import { saveGeneration } from "@/server/actions/generations";
 import { cn } from "@/lib/utils";
-import type { Persona } from "@/db/schema";
+import { TONE_OPTIONS, type ToneValue, type Persona } from "@/db/schema";
 
 interface ProposalOutput {
   proposal?: string;
@@ -41,6 +41,7 @@ const JOB_MAX = 5000;
 export function GeneratorForm({ personas }: GeneratorFormProps) {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>("");
   const [jobDescription, setJobDescription] = useState("");
+  const [tone, setTone] = useState<ToneValue>("professional");
   const [isLoading, setIsLoading] = useState(false);
   const [output, setOutput] = useState<ProposalOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +84,8 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
           jobDescription,
           personaId: selectedPersona.id,
           baseHourlyRate: selectedPersona.baseHourlyRate ?? 0,
+          tone,
+          portfolioItems: selectedPersona.portfolioItems ?? [],
         }),
         signal: controller.signal,
       });
@@ -105,6 +108,7 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
         outputBidAdvice: data.bidAdvice ?? "",
         jobBudget: data.jobBudgetCents ?? null,
         recommendedBid: data.profitAnalysis?.recommendedBid ?? null,
+        toneUsed: tone,
       });
 
       if (saveResult.error) {
@@ -116,7 +120,7 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPersona, jobDescription, jobValid, jobLen]);
+  }, [selectedPersona, jobDescription, jobValid, jobLen, tone]);
 
   const hasOutput = !!(
     output?.proposal ||
@@ -126,6 +130,8 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
   );
 
   const selectedPersonaTitle = selectedPersona?.title ?? "";
+  const selectedToneLabel =
+    TONE_OPTIONS.find((t) => t.value === tone)?.label ?? "Professional (LinkedIn)";
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
@@ -168,6 +174,28 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
               </SelectContent>
             </Select>
           )}
+        </div>
+
+        {/* ── Tone Selector ─── */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Tone</label>
+          <Select
+            value={tone}
+            onValueChange={(val) => setTone(val as ToneValue)}
+          >
+            <SelectTrigger id="tone-select" className="w-full">
+              <SelectValue placeholder="Select tone…">
+                {selectedToneLabel}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {TONE_OPTIONS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">

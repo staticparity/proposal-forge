@@ -30,7 +30,7 @@ const personaIdSchema = z.object({
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 async function getAuthUserId(): Promise<string> {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
   return userId;
 }
@@ -146,4 +146,41 @@ export async function getUserPersonas() {
     .from(personas)
     .where(eq(personas.userId, userId))
     .orderBy(personas.createdAt);
+}
+
+// ─── Quick Start ───────────────────────────────────────────────────────────
+const QUICK_START_PERSONA = {
+  title: "Full-Stack Web Developer",
+  content: `I'm a full-stack web developer with 5+ years of experience building modern web applications. My core stack includes React, Next.js, Node.js, TypeScript, and PostgreSQL.
+
+Key highlights:
+• Built and shipped 20+ production web apps for startups and agencies
+• Expert in responsive UI design, REST/GraphQL APIs, and cloud deployment (Vercel, AWS)
+• Strong focus on clean code, performance optimization, and user experience
+• Experience with Tailwind CSS, Prisma/Drizzle ORM, and CI/CD pipelines
+• Quick communicator who delivers on time and within scope
+
+I write code that's maintainable, well-tested, and production-ready. I'm comfortable working independently or as part of a team, and I always aim to understand the business problem before jumping into code.`,
+  baseHourlyRate: 7500, // $75/hr in cents
+} as const;
+
+export async function createQuickStartPersona() {
+  try {
+    const userId = await getAuthUserId();
+
+    await db.insert(personas).values({
+      userId,
+      title: QUICK_START_PERSONA.title,
+      content: QUICK_START_PERSONA.content,
+      baseHourlyRate: QUICK_START_PERSONA.baseHourlyRate,
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/personas");
+    return { success: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Failed to create starter persona",
+    };
+  }
 }

@@ -298,6 +298,31 @@ export function PersonaCard({ persona }: PersonaCardProps) {
             💰 ${(persona.baseHourlyRate / 100).toFixed(0)}/hr
           </p>
         )}
+        {persona.portfolioItems && persona.portfolioItems.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Portfolio
+            </p>
+            {persona.portfolioItems.slice(0, 3).map((item, i) => (
+              <a
+                key={i}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="font-medium text-foreground">{item.title}</span>
+                <span className="block text-muted-foreground line-clamp-1">{item.description}</span>
+              </a>
+            ))}
+            {persona.portfolioItems.length > 3 && (
+              <p className="text-[10px] text-muted-foreground">
+                +{persona.portfolioItems.length - 3} more
+              </p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

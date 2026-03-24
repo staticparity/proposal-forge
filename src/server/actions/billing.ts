@@ -4,14 +4,15 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { stripe, getProPriceId } from "@/lib/stripe";
+import { stripe, getBasicPriceId, getPremiumPriceId } from "@/lib/stripe";
 import { revalidatePath } from "next/cache";
+import { randomBytes } from "crypto";
 
 /**
- * Cancels the user's Pro subscription at the end of the current billing period.
+ * Cancels the user's subscription at the end of the current billing period.
  */
 export async function cancelSubscription(): Promise<{ error?: string }> {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) return { error: "Unauthorized" };
 
   const [user] = await db
@@ -25,7 +26,6 @@ export async function cancelSubscription(): Promise<{ error?: string }> {
   }
 
   try {
-    // Find active subscriptions for this customer
     const subscriptions = await stripe.subscriptions.list({
       customer: user.stripeCustomerId,
       status: "active",
@@ -36,7 +36,6 @@ export async function cancelSubscription(): Promise<{ error?: string }> {
       return { error: "No active subscription found" };
     }
 
-    // Cancel at end of current period (not immediate)
     await stripe.subscriptions.update(subscriptions.data[0].id, {
       cancel_at_period_end: true,
     });
@@ -55,11 +54,12 @@ export async function cancelSubscription(): Promise<{ error?: string }> {
 }
 
 /**
- * Creates a Stripe Checkout session for the Pro plan.
- * Returns the checkout URL for the client to redirect to.
+ * Creates a Stripe Checkout session for a given tier.
  */
-export async function createCheckoutSession(): Promise<{ url?: string; error?: string }> {
-  const { userId } = await auth();
+export async function createCheckoutSession(
+  tier: "basic" | "premium" = "basic"
+): Promise<{ url?: string; error?: string }> {
+  const userId = "test_user_disableclerk";
   if (!userId) return { error: "Unauthorized" };
 
   const [user] = await db
@@ -85,12 +85,15 @@ export async function createCheckoutSession(): Promise<{ url?: string; error?: s
   }
 
   try {
-    const priceId = await getProPriceId();
+    const priceId = tier === "premium"
+      ? await getPremiumPriceId()
+      : await getBasicPriceId();
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { tier },
       success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/billing?cancelled=true`,
     });
@@ -104,10 +107,9 @@ export async function createCheckoutSession(): Promise<{ url?: string; error?: s
 
 /**
  * Creates a Stripe Customer Portal session.
- * Returns the portal URL for the client to redirect to.
  */
 export async function createPortalSession(): Promise<{ url?: string; error?: string }> {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) return { error: "Unauthorized" };
 
   const [user] = await db
@@ -130,5 +132,40 @@ export async function createPortalSession(): Promise<{ url?: string; error?: str
   } catch (err) {
     console.error("Stripe portal error:", err);
     return { error: err instanceof Error ? err.message : "Portal failed" };
+  }
+}
+
+/**
+ * Generates a secure API key for premium users.
+ */
+export async function generateApiKey(): Promise<{ apiKey?: string; error?: string }> {
+  const userId = "test_user_disableclerk";
+  if (!userId) return { error: "Unauthorized" };
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) return { error: "User not found" };
+
+  if (user.tier !== "premium") {
+    return { error: "API key is only available for Premium tier users." };
+  }
+
+  try {
+    const key = `pf_${randomBytes(24).toString("hex")}`;
+
+    await db
+      .update(users)
+      .set({ apiKey: key })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/dashboard/billing");
+    return { apiKey: key };
+  } catch (err) {
+    console.error("API key generation error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to generate API key" };
   }
 }

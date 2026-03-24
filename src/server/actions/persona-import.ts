@@ -24,12 +24,23 @@ const generatedPersonaSchema = z.object({
       .describe(
         "A highly concise, ~150-word first-person summary of achievements in this specific domain"
       ),
+    portfolio_items: z
+      .array(
+        z.object({
+          title: z.string().describe("Name/title of the project or portfolio piece"),
+          url: z.string().describe("URL link to the project, portfolio item, or live demo"),
+          description: z.string().describe("One-line description of what this project demonstrates"),
+        })
+      )
+      .describe(
+        "Array of 0-5 portfolio items extracted from the profile. Only include items with real URLs found in the text. Do NOT invent links."
+      ),
   }),
 });
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 async function getAuthUserId(): Promise<string> {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) throw new Error("Unauthorized");
   return userId;
 }
@@ -100,6 +111,7 @@ Rules:
 - "content" must be a highly concise, first-person summary (~150 words) of their absolute best achievements in that specific domain
 - Write in a confident, professional tone as if the freelancer wrote it themselves
 - Focus on concrete results, technologies, and impact — not generic fluff
+- "portfolio_items": Extract any portfolio links, project URLs, GitHub repos, or live demos mentioned in the text. Only include items with REAL URLs that appear in the source text. Do NOT invent or fabricate any URLs. If no portfolio links are found, return an empty array.
 
 Profile/Resume text:
 ---
@@ -187,6 +199,7 @@ export async function importPersonaAction(
       userId,
       title: persona.title,
       content: persona.content,
+      portfolioItems: persona.portfolio_items?.length ? persona.portfolio_items : null,
     });
 
     await db

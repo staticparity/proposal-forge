@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronDown, ChevronUp, Copy, Check, MessageSquare } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  MessageSquare,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +28,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateGenerationStatus } from "@/server/actions/generations";
+import {
+  updateGenerationStatus,
+  generateFollowUp,
+} from "@/server/actions/generations";
 import {
   GENERATION_STATUSES,
   type GenerationStatus,
@@ -59,6 +70,8 @@ interface HistoryItem {
   outputQuestions: string | null;
   outputClientMessage: string | null;
   outputBidAdvice: string | null;
+  toneUsed: string | null;
+  followUpMessage: string | null;
   status: GenerationStatus;
   feedbackNotes: string | null;
   createdAt: Date;
@@ -73,6 +86,12 @@ export function HistoryCard({ item }: { item: HistoryItem }) {
   const [showNotes, setShowNotes] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Follow-up state
+  const [followUp, setFollowUp] = useState<string | null>(
+    item.followUpMessage
+  );
+  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+
   async function handleCopy(text: string, field: string) {
     await navigator.clipboard.writeText(text);
     setCopiedField(field);
@@ -83,9 +102,15 @@ export function HistoryCard({ item }: { item: HistoryItem }) {
     const newStatus = value as GenerationStatus;
     setStatus(newStatus);
     startTransition(async () => {
-      const result = await updateGenerationStatus(item.id, newStatus, notes || undefined);
+      const result = await updateGenerationStatus(
+        item.id,
+        newStatus,
+        notes || undefined
+      );
       if (result.success) {
-        toast.success(`Status updated to "${STATUS_CONFIG[newStatus].label}"`);
+        toast.success(
+          `Status updated to "${STATUS_CONFIG[newStatus].label}"`
+        );
       } else {
         toast.error(result.error ?? "Failed to update status");
         setStatus(item.status); // revert on failure
@@ -95,13 +120,36 @@ export function HistoryCard({ item }: { item: HistoryItem }) {
 
   function handleSaveNotes() {
     startTransition(async () => {
-      const result = await updateGenerationStatus(item.id, status, notes || undefined);
+      const result = await updateGenerationStatus(
+        item.id,
+        status,
+        notes || undefined
+      );
       if (result.success) {
         toast.success("Notes saved");
       } else {
         toast.error(result.error ?? "Failed to save notes");
       }
     });
+  }
+
+  async function handleGenerateFollowUp() {
+    setIsGeneratingFollowUp(true);
+    try {
+      const result = await generateFollowUp(item.id);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.followUp) {
+        setFollowUp(result.followUp);
+        toast.success("Follow-up message generated!");
+      }
+    } catch {
+      toast.error("Failed to generate follow-up");
+    } finally {
+      setIsGeneratingFollowUp(false);
+    }
   }
 
   const questions: string[] = item.outputQuestions
@@ -129,6 +177,12 @@ export function HistoryCard({ item }: { item: HistoryItem }) {
               >
                 {cfg.label}
               </span>
+              {/* Tone Badge */}
+              {item.toneUsed && (
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  {item.toneUsed}
+                </span>
+              )}
             </div>
             <CardDescription className="text-xs">
               {item.personaTitle ?? "Unknown persona"} •{" "}
@@ -283,6 +337,56 @@ export function HistoryCard({ item }: { item: HistoryItem }) {
                 copied={copiedField === "bid"}
               />
             )}
+
+            {/* ── Follow-Up Section ─────────────────────────────────── */}
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">📨 3-Day Follow-Up</h4>
+                {followUp && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleCopy(followUp, "followup")}
+                    className="opacity-60 hover:opacity-100"
+                  >
+                    {copiedField === "followup" ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              {followUp ? (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed rounded-lg bg-muted/50 p-3">
+                  {followUp}
+                </p>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGenerateFollowUp();
+                  }}
+                  disabled={isGeneratingFollowUp}
+                >
+                  {isGeneratingFollowUp ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Generate 3-Day Follow-Up
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </CardContent>
         </>
       )}

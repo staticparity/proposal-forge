@@ -1,5 +1,6 @@
 import { getUserPersonas } from "@/server/actions/personas";
 import { GeneratorForm } from "@/components/generator-form";
+import { QuickStartCard } from "@/components/quick-start-card";
 
 export default async function DashboardPage() {
   const personas = await getUserPersonas();
@@ -12,7 +13,11 @@ export default async function DashboardPage() {
           Generate winning proposals in seconds.
         </p>
       </div>
-      <GeneratorForm personas={personas} />
+      {personas.length === 0 ? (
+        <QuickStartCard />
+      ) : (
+        <GeneratorForm personas={personas} />
+      )}
     </div>
   );
 }

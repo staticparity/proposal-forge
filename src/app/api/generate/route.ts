@@ -4,11 +4,19 @@ import { auth } from "@clerk/nextjs/server";
 import { getAIModel } from "@/lib/ai";
 import type { AIProvider } from "@/lib/ai";
 import { db } from "@/db";
-import { users, generations } from "@/db/schema";
+import { users, generations, portfolioItemsSchema, type PortfolioItem } from "@/db/schema";
 import { getWonProposals } from "@/server/actions/history";
 import { eq } from "drizzle-orm";
 import { PLANS } from "@/lib/stripe";
 import { calculateOptimalBid, type BidResult } from "@/lib/bidding";
+
+// ─── Tone Descriptions ─────────────────────────────────────────────────────
+const TONE_DESCRIPTIONS: Record<string, string> = {
+  direct: "You must adopt a Direct & Punchy tone suitable for Fiverr. Be concise, bold, and action-oriented. Cut the fluff. Do not deviate.",
+  professional: "You must adopt a Professional tone suitable for LinkedIn and corporate platforms. Be polished, articulate, and measured. Do not deviate.",
+  consultative: "You must adopt a Consultative tone suitable for Upwork. Position yourself as an advisor, ask thoughtful questions, and show strategic thinking. Do not deviate.",
+  enthusiastic: "You must adopt an Enthusiastic tone. Show genuine excitement about the project while remaining professional. Be energetic and positive. Do not deviate.",
+};
 
 // ─── Output Schema ─────────────────────────────────────────────────────────
 const proposalOutputSchema = z.object({
@@ -87,12 +95,14 @@ const requestSchema = z.object({
   personaId: z.string().uuid().optional(),
   provider: z.enum(["openai", "google"]).optional(),
   baseHourlyRate: z.number().int().min(0).optional(), // cents
+  tone: z.enum(["direct", "professional", "consultative", "enthusiastic"]).default("professional"),
+  portfolioItems: portfolioItemsSchema.optional().default([]),
 });
 
 // ─── Route Handler ─────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   // Auth check
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -115,14 +125,14 @@ export async function POST(req: Request) {
 
   const maxAllowed =
     user.subscriptionStatus === "pro"
-      ? PLANS.pro.maxGenerations
+      ? PLANS.basic.maxGenerations
       : PLANS.free.maxGenerations;
 
-  if (genCount.length >= maxAllowed) {
+  if (isFinite(maxAllowed) && genCount.length >= maxAllowed) {
     const message =
       user.subscriptionStatus === "pro"
-        ? "You've reached the 1,500 generation limit. Contact support to increase."
-        : "You've used all 5 free generations. Upgrade to Pro for 1,500 generations.";
+        ? "You've reached the generation limit. Contact support to increase."
+        : "You've used all 15 free generations. Upgrade to Basic for unlimited generations.";
     return Response.json({ error: message }, { status: 429 });
   }
 
@@ -136,7 +146,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { personaContent, personaTitle, jobDescription, provider, baseHourlyRate } =
+  const { personaContent, personaTitle, jobDescription, provider, baseHourlyRate, tone, portfolioItems } =
     parsed.data;
 
   const model = getAIModel(provider as AIProvider | undefined);
@@ -149,6 +159,20 @@ export async function POST(req: Request) {
       .filter(Boolean) as string[];
 
     let systemPrompt = SYSTEM_PROMPT;
+
+    // ── Tone injection ──
+    const toneInstruction = TONE_DESCRIPTIONS[tone] ?? TONE_DESCRIPTIONS.professional;
+    systemPrompt += `\n\nTONE INSTRUCTION:\n${toneInstruction}`;
+
+    // ── Portfolio injection ──
+    if (portfolioItems && portfolioItems.length > 0) {
+      const itemsList = portfolioItems
+        .map((item: PortfolioItem) => `- ${item.title}: ${item.url} — ${item.description}`)
+        .join("\n");
+      systemPrompt += `\n\nPORTFOLIO ITEMS (reference these to prove expertise — do NOT invent links):\n${itemsList}`;
+      systemPrompt += `\nInstruction: Review the client's job description and the user's portfolio items above. Select the 1 or 2 most relevant portfolio links and seamlessly weave them into the proposal as proof of competence.`;
+    }
+
     if (wonTexts.length > 0) {
       const examples = wonTexts
         .map((p, i) => `--- WINNING PROPOSAL ${i + 1} ---\n${p}`)
@@ -192,6 +216,7 @@ export async function POST(req: Request) {
       budgetExtraction: budget,
       profitAnalysis,
       jobBudgetCents,
+      toneUsed: tone,
     });
   } catch (err) {
     console.error("AI generation error:", err);

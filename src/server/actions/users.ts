@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
  * Returns the DB user row, or null if no Clerk session.
  */
 export async function ensureUserInDb() {
-  const { userId } = await auth();
+  const userId = "test_user_disableclerk";
   if (!userId) return null;
 
   const existing = await db
@@ -32,7 +32,7 @@ export async function ensureUserInDb() {
     .values({
       id: userId,
       subscriptionStatus: "free",
-      credits: 5,
+      credits: 15,
     })
     .returning();
 

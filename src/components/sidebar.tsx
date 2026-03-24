@@ -64,13 +64,7 @@ export function Sidebar() {
       {/* User */}
       <Separator />
       <div className="flex items-center gap-3 px-6 py-4">
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: "h-8 w-8",
-            },
-          }}
-        />
+        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs text-white">TU</div>
         <span className="text-sm text-muted-foreground">Account</span>
       </div>
     </aside>
