@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Check, CreditCard, Sparkles, Zap } from "lucide-react";
+import { Check, Sparkles, Zap } from "lucide-react";
 
 export default async function BillingPage() {
   const user = await ensureUserInDb();
@@ -131,21 +131,6 @@ export default async function BillingPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Payment Info */}
-      {isPro && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-base">Payment</CardTitle>
-            </div>
-            <CardDescription>
-              Manage your subscription via Stripe
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
     </div>
   );
 }
