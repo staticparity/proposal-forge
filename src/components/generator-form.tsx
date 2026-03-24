@@ -15,6 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { OutputPanel } from "@/components/output-panel";
 import { saveGeneration } from "@/server/actions/generations";
+import { cn } from "@/lib/utils";
 import type { Persona } from "@/db/schema";
 
 interface ProposalOutput {
@@ -28,24 +29,32 @@ interface GeneratorFormProps {
   personas: Persona[];
 }
 
+const JOB_MIN = 20;
+const JOB_MAX = 5000;
+
 export function GeneratorForm({ personas }: GeneratorFormProps) {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>("");
   const [jobDescription, setJobDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [output, setOutput] = useState<ProposalOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hasSaved, setHasSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const selectedPersona = personas.find((p) => p.id === selectedPersonaId);
+  const jobLen = jobDescription.length;
+  const jobValid = jobLen >= JOB_MIN && jobLen <= JOB_MAX;
 
   const handleGenerate = useCallback(async () => {
     if (!selectedPersona) {
       toast.error("Please select a persona first.");
       return;
     }
-    if (jobDescription.length < 20) {
-      toast.error("Job description must be at least 20 characters.");
+    if (!jobValid) {
+      toast.error(
+        jobLen < JOB_MIN
+          ? "Job description must be at least 20 characters."
+          : "Job description is too long (max 5,000 characters)."
+      );
       return;
     }
 
@@ -57,7 +66,6 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
     setIsLoading(true);
     setOutput(null);
     setError(null);
-    setHasSaved(false);
 
     try {
       const res = await fetch("/api/generate", {
@@ -79,33 +87,27 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
       }
 
       setOutput(data);
+
+      // ── Auto-save to history ──
+      const saveResult = await saveGeneration({
+        personaId: selectedPersona.id,
+        jobDescription,
+        outputProposal: data.proposal ?? "",
+        outputQuestions: JSON.stringify(data.questions ?? []),
+        outputClientMessage: data.clientMessage ?? "",
+        outputBidAdvice: data.bidAdvice ?? "",
+      });
+
+      if (saveResult.error) {
+        console.error("Auto-save failed:", saveResult.error);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Generation failed");
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPersona, jobDescription]);
-
-  const handleSave = useCallback(async () => {
-    if (!output?.proposal || hasSaved) return;
-
-    const result = await saveGeneration({
-      personaId: selectedPersonaId || undefined,
-      jobDescription,
-      outputProposal: output.proposal ?? "",
-      outputQuestions: JSON.stringify(output.questions ?? []),
-      outputClientMessage: output.clientMessage ?? "",
-      outputBidAdvice: output.bidAdvice ?? "",
-    });
-
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success("Generation saved to history!");
-      setHasSaved(true);
-    }
-  }, [output, hasSaved, selectedPersonaId, jobDescription]);
+  }, [selectedPersona, jobDescription, jobValid, jobLen]);
 
   const hasOutput = !!(
     output?.proposal ||
@@ -114,7 +116,6 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
     output?.bidAdvice
   );
 
-  // Get persona title for display
   const selectedPersonaTitle = selectedPersona?.title ?? "";
 
   return (
@@ -156,27 +157,47 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="job-description" className="text-sm font-medium">
-            Job Description
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="job-description" className="text-sm font-medium">
+              Job Description
+            </label>
+            <span
+              className={cn(
+                "text-xs tabular-nums transition-colors",
+                jobLen > JOB_MAX
+                  ? "text-destructive font-medium"
+                  : jobLen > 0 && jobLen < JOB_MIN
+                    ? "text-amber-500"
+                    : jobLen > JOB_MAX * 0.9
+                      ? "text-amber-500"
+                      : "text-muted-foreground"
+              )}
+            >
+              {jobLen} / {JOB_MAX}
+              {jobLen > 0 && jobLen < JOB_MIN && ` (min ${JOB_MIN})`}
+              {jobLen > JOB_MAX && " — too long"}
+            </span>
+          </div>
           <Textarea
             id="job-description"
             placeholder="Paste the full job description here…"
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
             rows={12}
-            className="resize-none overflow-y-auto"
+            className={cn(
+              "resize-none overflow-y-auto",
+              jobLen > JOB_MAX &&
+                "border-destructive focus-visible:ring-destructive/50",
+              jobLen > 0 &&
+                jobLen < JOB_MIN &&
+                "border-amber-500 focus-visible:ring-amber-500/50"
+            )}
           />
-          <p className="text-xs text-muted-foreground">
-            {jobDescription.length} characters
-          </p>
         </div>
 
         <Button
           onClick={handleGenerate}
-          disabled={
-            isLoading || !selectedPersonaId || jobDescription.length < 20
-          }
+          disabled={isLoading || !selectedPersonaId || !jobValid}
           className="w-full"
           size="lg"
         >
@@ -236,15 +257,6 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
               title="💰 Bid Advice"
               content={output?.bidAdvice ?? ""}
             />
-
-            <Button
-              onClick={handleSave}
-              disabled={hasSaved}
-              variant="outline"
-              className="w-full"
-            >
-              {hasSaved ? "✓ Saved to History" : "Save to History"}
-            </Button>
           </>
         )}
 

@@ -22,12 +22,47 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { Persona } from "@/db/schema";
 import {
   createPersona,
   updatePersona,
   deletePersona,
 } from "@/server/actions/personas";
+
+// ─── Character Counter ─────────────────────────────────────────────────────
+function CharCount({
+  current,
+  min,
+  max,
+}: {
+  current: number;
+  min: number;
+  max: number;
+}) {
+  const isUnder = current < min && current > 0;
+  const isOver = current > max;
+  const isNearMax = current > max * 0.9 && current <= max;
+
+  return (
+    <span
+      className={cn(
+        "text-xs tabular-nums transition-colors",
+        isOver
+          ? "text-destructive font-medium"
+          : isUnder
+            ? "text-amber-500"
+            : isNearMax
+              ? "text-amber-500"
+              : "text-muted-foreground"
+      )}
+    >
+      {current} / {max}
+      {isUnder && ` (min ${min})`}
+      {isOver && ` — too long`}
+    </span>
+  );
+}
 
 // ─── PersonaForm (Create / Edit) ───────────────────────────────────────────
 interface PersonaFormProps {
@@ -38,7 +73,14 @@ interface PersonaFormProps {
 export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [titleLen, setTitleLen] = useState(persona?.title?.length ?? 0);
+  const [contentLen, setContentLen] = useState(
+    persona?.content?.length ?? 0
+  );
   const isEditing = !!persona;
+
+  const titleValid = titleLen >= 2 && titleLen <= 100;
+  const contentValid = contentLen >= 50 && contentLen <= 2000;
 
   async function handleSubmit(formData: FormData) {
     startTransition(async () => {
@@ -95,43 +137,55 @@ export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
         </DialogHeader>
         <form action={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label
-              htmlFor="title"
-              className="text-sm font-medium leading-none"
-            >
-              Title
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="title"
+                className="text-sm font-medium leading-none"
+              >
+                Title
+              </label>
+              <CharCount current={titleLen} min={2} max={100} />
+            </div>
             <Input
               id="title"
               name="title"
               placeholder='e.g. "React Developer"'
               defaultValue={persona?.title ?? ""}
+              onChange={(e) => setTitleLen(e.target.value.length)}
               required
               minLength={2}
               maxLength={100}
+              className={cn(
+                titleLen > 100 && "border-destructive focus-visible:ring-destructive/50"
+              )}
             />
           </div>
           <div className="space-y-2">
-            <label
-              htmlFor="content"
-              className="text-sm font-medium leading-none"
-            >
-              Bio / Skills
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="content"
+                className="text-sm font-medium leading-none"
+              >
+                Bio / Skills
+              </label>
+              <CharCount current={contentLen} min={50} max={2000} />
+            </div>
             <Textarea
               id="content"
               name="content"
               placeholder="Describe your skills, experience, portfolio highlights… (150-300 words works best)"
               defaultValue={persona?.content ?? ""}
+              onChange={(e) => setContentLen(e.target.value.length)}
               required
               minLength={50}
               maxLength={2000}
               rows={8}
-              className="resize-y"
+              className={cn(
+                "resize-none overflow-y-auto",
+                contentLen > 2000 && "border-destructive focus-visible:ring-destructive/50",
+                contentLen > 0 && contentLen < 50 && "border-amber-500 focus-visible:ring-amber-500/50"
+              )}
             />
-            <p className="text-xs text-muted-foreground">
-              50–2000 characters. Be specific — this powers the AI.
-            </p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
@@ -141,7 +195,10 @@ export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button
+              type="submit"
+              disabled={isPending || !titleValid || !contentValid}
+            >
               {isPending
                 ? "Saving…"
                 : isEditing
