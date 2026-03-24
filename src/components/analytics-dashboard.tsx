@@ -12,6 +12,9 @@ import {
   AreaChart,
   Area,
   Cell,
+  LineChart,
+  Line,
+  ReferenceLine,
 } from "recharts";
 import {
   Card,
@@ -25,6 +28,11 @@ interface AnalyticsData {
   total: number;
   counts: Record<string, number>;
   monthly: { month: string; count: number }[];
+}
+
+interface ProfitTrackingData {
+  monthlyRates: { month: string; avgBid: number; count: number }[];
+  avgBaseRate: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -41,7 +49,13 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-export function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
+export function AnalyticsDashboard({
+  data,
+  profitData,
+}: {
+  data: AnalyticsData;
+  profitData?: ProfitTrackingData;
+}) {
   const [mounted, setMounted] = useState(false);
 
   // Hydration guard — recharts is not SSR-safe
@@ -212,6 +226,110 @@ export function AnalyticsDashboard({ data }: { data: AnalyticsData }) {
                       fill="url(#proposalGrad)"
                     />
                   </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Profit Tracking ────────────────────────────────────────── */}
+      {mounted && profitData && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Profit Optimization</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Average Bid Rate Over Time</CardTitle>
+              <CardDescription className="text-xs">
+                Your effective bid rate vs. your base hourly rate
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {profitData.monthlyRates.length === 0 ? (
+                <EmptyChart message="No bid data yet — generate proposals with a base rate set to start tracking" />
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart
+                    data={profitData.monthlyRates.map((m) => ({
+                      month: formatMonth(m.month),
+                      avgBid: Math.round(m.avgBid / 100),
+                      baseRate: Math.round(profitData.avgBaseRate / 100),
+                      proposals: m.count,
+                    }))}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="bidGrad"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#10b981"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#10b981"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(var(--border))"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      formatter={((value: unknown, name: string) => [
+                        `$${value}`,
+                        name === "avgBid" ? "Avg Bid Rate" : "Base Rate",
+                      ]) as never}
+                    />
+                    {profitData.avgBaseRate > 0 && (
+                      <ReferenceLine
+                        y={Math.round(profitData.avgBaseRate / 100)}
+                        stroke="#f59e0b"
+                        strokeDasharray="6 3"
+                        strokeWidth={1.5}
+                        label={{
+                          value: `Base: $${Math.round(profitData.avgBaseRate / 100)}/hr`,
+                          position: "insideTopRight",
+                          fill: "#f59e0b",
+                          fontSize: 11,
+                        }}
+                      />
+                    )}
+                    <Line
+                      type="monotone"
+                      dataKey="avgBid"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      dot={{ fill: "#10b981", r: 4 }}
+                      activeDot={{ r: 6, strokeWidth: 2 }}
+                      name="avgBid"
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
               )}
             </CardContent>

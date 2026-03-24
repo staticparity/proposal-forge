@@ -77,6 +77,9 @@ export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
   const [contentLen, setContentLen] = useState(
     persona?.content?.length ?? 0
   );
+  const [rate, setRate] = useState(
+    persona?.baseHourlyRate ? persona.baseHourlyRate / 100 : 0
+  );
   const isEditing = !!persona;
 
   const titleValid = titleLen >= 2 && titleLen <= 100;
@@ -84,6 +87,10 @@ export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
 
   async function handleSubmit(formData: FormData) {
     startTransition(async () => {
+      // Convert dollar input → cents for storage
+      const rawRate = Number(formData.get("baseHourlyRate") || 0);
+      formData.set("baseHourlyRate", String(Math.round(rawRate * 100)));
+
       if (isEditing) {
         formData.set("id", persona.id);
       }
@@ -187,6 +194,27 @@ export function PersonaForm({ persona, onSuccess }: PersonaFormProps) {
               )}
             />
           </div>
+          <div className="space-y-2">
+            <label
+              htmlFor="baseHourlyRate"
+              className="text-sm font-medium leading-none"
+            >
+              Target Hourly Rate ($)
+            </label>
+            <Input
+              id="baseHourlyRate"
+              name="baseHourlyRate"
+              type="number"
+              min={0}
+              step={1}
+              placeholder="e.g. 75"
+              value={rate || ""}
+              onChange={(e) => setRate(Number(e.target.value))}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Used to calculate optimal bids and track your effective rate.
+            </p>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -265,6 +293,11 @@ export function PersonaCard({ persona }: PersonaCardProps) {
         <p className="text-sm text-muted-foreground line-clamp-4 whitespace-pre-wrap">
           {persona.content}
         </p>
+        {persona.baseHourlyRate > 0 && (
+          <p className="mt-2 text-xs font-medium text-emerald-500">
+            💰 ${(persona.baseHourlyRate / 100).toFixed(0)}/hr
+          </p>
+        )}
       </CardContent>
     </Card>
   );

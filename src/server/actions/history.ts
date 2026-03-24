@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { generations, personas } from "@/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, isNotNull } from "drizzle-orm";
 
 export async function getUserGenerations() {
   const { userId } = await auth();
@@ -100,4 +100,48 @@ export async function getAnalyticsData() {
     .orderBy(sql`to_char(${generations.createdAt}, 'YYYY-MM')`);
 
   return { total, counts, monthly };
+}
+
+/**
+ * Fetch monthly average effective hourly rate data for profit tracking.
+ * Only includes generations with finalBidSubmitted or recommendedBid set.
+ */
+export async function getProfitTrackingData() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // Monthly avg effective rate from bid data
+  const monthlyRates = await db
+    .select({
+      month: sql<string>`to_char(${generations.createdAt}, 'YYYY-MM')`,
+      avgBid: sql<number>`round(avg(coalesce(${generations.finalBidSubmitted}, ${generations.recommendedBid})))::int`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(generations)
+    .where(
+      and(
+        eq(generations.userId, userId),
+        sql`coalesce(${generations.finalBidSubmitted}, ${generations.recommendedBid}) is not null`,
+        sql`${generations.createdAt} >= now() - interval '6 months'`
+      )
+    )
+    .groupBy(sql`to_char(${generations.createdAt}, 'YYYY-MM')`)
+    .orderBy(sql`to_char(${generations.createdAt}, 'YYYY-MM')`);
+
+  // Get user's avg base rate from personas for reference line
+  const personaRates = await db
+    .select({
+      avgRate: sql<number>`round(avg(${personas.baseHourlyRate}))::int`,
+    })
+    .from(personas)
+    .where(
+      and(
+        eq(personas.userId, userId),
+        sql`${personas.baseHourlyRate} > 0`
+      )
+    );
+
+  const avgBaseRate = personaRates[0]?.avgRate ?? 0;
+
+  return { monthlyRates, avgBaseRate };
 }

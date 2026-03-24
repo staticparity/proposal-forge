@@ -31,6 +31,7 @@ export const personas = pgTable("personas", {
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  baseHourlyRate: integer("base_hourly_rate").default(0).notNull(), // cents
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -54,6 +55,9 @@ export const generations = pgTable("generations", {
     .default("pending")
     .notNull(),
   feedbackNotes: text("feedback_notes"),
+  jobBudget: integer("job_budget"),             // cents — extracted from job description
+  recommendedBid: integer("recommended_bid"),   // cents — calculated optimal bid
+  finalBidSubmitted: integer("final_bid_submitted"), // cents — what user actually bid
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

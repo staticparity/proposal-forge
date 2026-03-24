@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OutputPanel } from "@/components/output-panel";
+import {
+  ProfitAnalysisCard,
+  type ProfitAnalysis,
+} from "@/components/profit-analysis-card";
 import { saveGeneration } from "@/server/actions/generations";
 import { cn } from "@/lib/utils";
 import type { Persona } from "@/db/schema";
@@ -23,6 +27,8 @@ interface ProposalOutput {
   clientMessage?: string;
   questions?: string[];
   bidAdvice?: string;
+  profitAnalysis?: ProfitAnalysis | null;
+  jobBudgetCents?: number;
 }
 
 interface GeneratorFormProps {
@@ -76,6 +82,7 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
           personaTitle: selectedPersona.title,
           jobDescription,
           personaId: selectedPersona.id,
+          baseHourlyRate: selectedPersona.baseHourlyRate ?? 0,
         }),
         signal: controller.signal,
       });
@@ -96,6 +103,8 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
         outputQuestions: JSON.stringify(data.questions ?? []),
         outputClientMessage: data.clientMessage ?? "",
         outputBidAdvice: data.bidAdvice ?? "",
+        jobBudget: data.jobBudgetCents ?? null,
+        recommendedBid: data.profitAnalysis?.recommendedBid ?? null,
       });
 
       if (saveResult.error) {
@@ -149,6 +158,11 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
                 {personas.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.title}
+                    {p.baseHourlyRate > 0 && (
+                      <span className="ml-2 text-xs text-emerald-500">
+                        ${(p.baseHourlyRate / 100).toFixed(0)}/hr
+                      </span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -232,6 +246,11 @@ export function GeneratorForm({ personas }: GeneratorFormProps) {
 
         {!isLoading && hasOutput && (
           <>
+            {/* ── Profit Analysis (shown first when available) ─── */}
+            {output?.profitAnalysis && (
+              <ProfitAnalysisCard analysis={output.profitAnalysis} />
+            )}
+
             <OutputPanel
               title="📝 Proposal"
               content={output?.proposal ?? ""}

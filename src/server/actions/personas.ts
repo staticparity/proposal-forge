@@ -17,6 +17,11 @@ const personaSchema = z.object({
     .string()
     .min(50, "Bio must be at least 50 characters")
     .max(2000, "Bio must be under 2000 characters"),
+  baseHourlyRate: z.coerce
+    .number()
+    .int()
+    .min(0, "Hourly rate cannot be negative")
+    .default(0),
 });
 
 const personaIdSchema = z.object({
@@ -38,6 +43,7 @@ export async function createPersona(formData: FormData) {
     const parsed = personaSchema.safeParse({
       title: formData.get("title"),
       content: formData.get("content"),
+      baseHourlyRate: formData.get("baseHourlyRate") ?? 0,
     });
 
     if (!parsed.success) {
@@ -48,6 +54,7 @@ export async function createPersona(formData: FormData) {
       userId,
       title: parsed.data.title,
       content: parsed.data.content,
+      baseHourlyRate: parsed.data.baseHourlyRate,
     });
 
     revalidatePath("/dashboard/personas");
@@ -72,6 +79,7 @@ export async function updatePersona(formData: FormData) {
     const parsed = personaSchema.safeParse({
       title: formData.get("title"),
       content: formData.get("content"),
+      baseHourlyRate: formData.get("baseHourlyRate") ?? 0,
     });
 
     if (!parsed.success) {
@@ -83,6 +91,7 @@ export async function updatePersona(formData: FormData) {
       .set({
         title: parsed.data.title,
         content: parsed.data.content,
+        baseHourlyRate: parsed.data.baseHourlyRate,
       })
       .where(and(eq(personas.id, idResult.data.id), eq(personas.userId, userId)))
       .returning();

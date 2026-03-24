@@ -22,6 +22,13 @@
       "when": 1774391708619,
       "tag": "0002_slippery_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774392690799,
+      "tag": "0003_tiny_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

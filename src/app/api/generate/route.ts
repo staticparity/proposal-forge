@@ -8,6 +8,7 @@ import { users, generations } from "@/db/schema";
 import { getWonProposals } from "@/server/actions/history";
 import { eq } from "drizzle-orm";
 import { PLANS } from "@/lib/stripe";
+import { calculateOptimalBid, type BidResult } from "@/lib/bidding";
 
 // ─── Output Schema ─────────────────────────────────────────────────────────
 const proposalOutputSchema = z.object({
@@ -25,6 +26,21 @@ const proposalOutputSchema = z.object({
 });
 
 export type ProposalOutput = z.infer<typeof proposalOutputSchema>;
+
+// ─── Budget Extraction Schema ──────────────────────────────────────────────
+const budgetExtractionSchema = z.object({
+  job_type: z
+    .enum(["hourly", "fixed"])
+    .describe("Whether the job is hourly or fixed-price"),
+  estimated_budget: z
+    .number()
+    .describe("The estimated total budget in USD dollars (whole number)"),
+  urgency: z
+    .enum(["high", "normal"])
+    .describe("How urgent the job seems based on the description"),
+});
+
+export type BudgetExtraction = z.infer<typeof budgetExtractionSchema>;
 
 // ─── System Prompt ─────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are an expert freelance proposal writer. You help freelancers win jobs by writing highly personalized, conversational, and direct proposals.
@@ -52,6 +68,13 @@ FORMAT RULES for the "questions" field:
 FORMAT RULES for the "bidAdvice" field:
 - 1-2 sentences of practical pricing/bidding advice for this specific job`;
 
+const BUDGET_SYSTEM_PROMPT = `You are a job posting analyzer. Given a freelance job description, extract:
+1. Whether it's hourly or fixed-price
+2. The estimated total budget in USD (if not stated, estimate based on typical market rates for the described scope)
+3. Whether the job seems urgent (tight deadlines, ASAP language, rush job)
+
+Be practical and realistic with budget estimates. If a budget range is given, use the midpoint.`;
+
 // ─── Request Schema ────────────────────────────────────────────────────────
 const requestSchema = z.object({
   personaContent: z
@@ -63,6 +86,7 @@ const requestSchema = z.object({
     .min(20, "Job description must be at least 20 characters"),
   personaId: z.string().uuid().optional(),
   provider: z.enum(["openai", "google"]).optional(),
+  baseHourlyRate: z.number().int().min(0).optional(), // cents
 });
 
 // ─── Route Handler ─────────────────────────────────────────────────────────
@@ -112,7 +136,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { personaContent, personaTitle, jobDescription, provider } =
+  const { personaContent, personaTitle, jobDescription, provider, baseHourlyRate } =
     parsed.data;
 
   const model = getAIModel(provider as AIProvider | undefined);
@@ -132,15 +156,43 @@ export async function POST(req: Request) {
       systemPrompt += `\n\nBelow are examples of the user's past winning proposals. Analyze their tone, structure, and pacing. Mimic this exact winning style for the new proposal:\n\n${examples}`;
     }
 
-    // Generate structured object (non-streaming, reliable JSON response)
-    const { object } = await generateObject({
-      model,
-      schema: proposalOutputSchema,
-      prompt: `FREELANCER PERSONA (${personaTitle}):\n${personaContent}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nGenerate a winning proposal, client message, 3 smart questions, and bid advice.`,
-      system: systemPrompt,
-    });
+    // ── Run proposal generation + budget extraction IN PARALLEL ──
+    const [proposalResult, budgetResult] = await Promise.all([
+      generateObject({
+        model,
+        schema: proposalOutputSchema,
+        prompt: `FREELANCER PERSONA (${personaTitle}):\n${personaContent}\n\nJOB DESCRIPTION:\n${jobDescription}\n\nGenerate a winning proposal, client message, 3 smart questions, and bid advice.`,
+        system: systemPrompt,
+      }),
+      generateObject({
+        model,
+        schema: budgetExtractionSchema,
+        prompt: `Analyze this job posting and extract budget information:\n\n${jobDescription}`,
+        system: BUDGET_SYSTEM_PROMPT,
+      }),
+    ]);
 
-    return Response.json(object);
+    // ── Calculate optimal bid if base rate is set ──
+    let profitAnalysis: (BidResult & { jobType: "hourly" | "fixed" }) | null = null;
+    const budget = budgetResult.object;
+    const jobBudgetCents = Math.round(budget.estimated_budget * 100); // dollars → cents
+
+    if (baseHourlyRate && baseHourlyRate > 0) {
+      const bidResult = calculateOptimalBid({
+        baseRate: baseHourlyRate,
+        jobBudget: jobBudgetCents,
+        urgency: budget.urgency,
+        jobType: budget.job_type,
+      });
+      profitAnalysis = { ...bidResult, jobType: budget.job_type };
+    }
+
+    return Response.json({
+      ...proposalResult.object,
+      budgetExtraction: budget,
+      profitAnalysis,
+      jobBudgetCents,
+    });
   } catch (err) {
     console.error("AI generation error:", err);
     return Response.json(

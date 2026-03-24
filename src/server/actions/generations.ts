@@ -14,6 +14,9 @@ const saveSchema = z.object({
   outputQuestions: z.string().min(1), // JSON-stringified
   outputClientMessage: z.string().min(1),
   outputBidAdvice: z.string().min(1),
+  jobBudget: z.number().int().nullable().optional(),
+  recommendedBid: z.number().int().nullable().optional(),
+  finalBidSubmitted: z.number().int().nullable().optional(),
 });
 
 export async function saveGeneration(data: z.infer<typeof saveSchema>) {
@@ -36,6 +39,9 @@ export async function saveGeneration(data: z.infer<typeof saveSchema>) {
         outputQuestions: parsed.data.outputQuestions,
         outputClientMessage: parsed.data.outputClientMessage,
         outputBidAdvice: parsed.data.outputBidAdvice,
+        jobBudget: parsed.data.jobBudget ?? null,
+        recommendedBid: parsed.data.recommendedBid ?? null,
+        finalBidSubmitted: parsed.data.finalBidSubmitted ?? null,
       })
       .returning();
 
